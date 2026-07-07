@@ -1,3 +1,7 @@
+# Python API Test Automation Practice
+
+![Python API Tests](https://github.com/sskt0906/qa-python/actions/workflows/python-tests.yml/badge.svg)
+
 \# Python API Test Automation Practice
 
 
