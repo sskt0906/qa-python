@@ -1,19 +1,31 @@
+import pytest
 import requests
 
-def test_get_api_status_code():
-    response = requests.get("https://httpbin.org/get", timeout=10)
+BASE_URL = "https://httpbin.org"
+TIMEOUT = 30
 
-    assert response.status_code == 200
+def assert_status_code(response, expected_status_code):
+    if response.status_code == 503:
+        pytest.skip("外部APIが503を返したためスキップ")
+
+    assert response.status_code == expected_status_code
+
+def test_get_api_status_code():
+    response = requests.get(f"{BASE_URL}/get", timeout=TIMEOUT)
+
+    assert_status_code(response, 200)
+
 
 def test_get_api_json():
-    response = requests.get("https://httpbin.org/get", timeout=10)
+    response = requests.get(f"{BASE_URL}/get", timeout=TIMEOUT)
 
-    assert response.status_code == 200
+    assert_status_code(response, 200)
 
     data = response.json()
 
     assert "url" in data
-    assert data["url"] == "https://httpbin.org/get"
+    assert data["url"] == f"{BASE_URL}/get"
+
 
 def test_post_api_json():
     payload = {
@@ -22,35 +34,36 @@ def test_post_api_json():
     }
 
     response = requests.post(
-        "https://httpbin.org/post",
+        f"{BASE_URL}/post",
         json=payload,
-        timeout=10
+        timeout=TIMEOUT
     )
 
-    assert response.status_code == 200
+    assert_status_code(response, 200)
 
     data = response.json()
 
-    assert data["json"]["name"] == "sasaki"
-    assert data["json"]["job"] == "qa"
+    assert data["json"]["name"] == payload["name"]
+    assert data["json"]["job"] == payload["job"]
+
 
 def test_not_found_status_code():
-    response = requests.get("https://httpbin.org/status/404", timeout=10)
+    response = requests.get(f"{BASE_URL}/status/404", timeout=TIMEOUT)
 
-    assert response.status_code == 404
+    assert_status_code(response, 404)
+
 
 def test_server_error_status_code():
-    response = requests.get("https://httpbin.org/status/500", timeout=10)
+    response = requests.get(f"{BASE_URL}/status/500", timeout=TIMEOUT)
 
-    assert response.status_code == 500
+    assert_status_code(response, 500)
 
-import pytest
 
 @pytest.mark.parametrize("status_code", [200, 404, 500])
 def test_status_code_parametrize(status_code):
     response = requests.get(
-        f"https://httpbin.org/status/{status_code}",
-        timeout=10
+        f"{BASE_URL}/status/{status_code}",
+        timeout=TIMEOUT
     )
 
-    assert response.status_code == status_code
+    assert_status_code(response, status_code)
