@@ -3,6 +3,9 @@ from typing import Any
 import requests
 
 
+RETRY_STATUS_CODES = {500, 502, 503, 504}
+
+
 class UserNotFoundError(Exception):
     """ユーザーが存在しない場合の例外。"""
 
@@ -17,9 +20,11 @@ class UserApiClient:
         base_url: str,
         token: str,
         timeout: int = 5,
+        max_retries: int = 2,
     ) -> None:
         self.base_url = base_url.rstrip("/")
         self.timeout = timeout
+        self.max_retries = max_retries
 
         self.session = requests.Session()
         self.session.headers.update(
@@ -35,9 +40,8 @@ class UserApiClient:
         if user_id <= 0:
             raise ValueError("user_idは1以上で指定してください")
 
-        response = self.session.get(
-            f"{self.base_url}/users/{user_id}",
-            timeout=self.timeout,
+        response = self._get_with_retry(
+            f"{self.base_url}/users/{user_id}"
         )
 
         if response.status_code == 404:
@@ -51,6 +55,30 @@ class UserApiClient:
         self._validate_user_response(data)
 
         return data
+
+    def _get_with_retry(self, url: str) -> requests.Response:
+        """一時的なサーバーエラーやタイムアウト時に再試行する。"""
+
+        for attempt in range(self.max_retries + 1):
+            try:
+                response = self.session.get(
+                    url,
+                    timeout=self.timeout,
+                )
+
+            except requests.exceptions.Timeout:
+                if attempt == self.max_retries:
+                    raise
+
+                continue
+
+            if response.status_code not in RETRY_STATUS_CODES:
+                return response
+
+            if attempt == self.max_retries:
+                response.raise_for_status()
+
+        raise RuntimeError("リトライ処理で想定外の状態になりました")
 
     def create_user(
         self,

@@ -220,3 +220,146 @@ def test_get_user_invalid_id(
         api_client.get_user(user_id)
 
     assert requests_mock.call_count == 0
+def test_get_user_retry_then_success(
+    requests_mock,
+    api_client,
+):
+    """1回目は500、2回目は200なら取得に成功する。"""
+
+    requests_mock.get(
+        f"{BASE_URL}/users/1",
+        [
+            {
+                "status_code": 500,
+                "json": {
+                    "message": "Temporary server error",
+                },
+            },
+            {
+                "status_code": 200,
+                "json": {
+                    "id": 1,
+                    "name": "sasaki",
+                    "job": "qa",
+                },
+            },
+        ],
+    )
+
+    result = api_client.get_user(1)
+
+    assert result == {
+        "id": 1,
+        "name": "sasaki",
+        "job": "qa",
+    }
+
+    assert requests_mock.call_count == 2
+def test_get_user_retry_then_success(
+    requests_mock,
+    api_client,
+):
+    """1回目が500、2回目が200なら取得に成功する。"""
+
+    requests_mock.get(
+        f"{BASE_URL}/users/1",
+        [
+            {
+                "status_code": 500,
+                "json": {
+                    "message": "Temporary server error",
+                },
+            },
+            {
+                "status_code": 200,
+                "json": {
+                    "id": 1,
+                    "name": "sasaki",
+                    "job": "qa",
+                },
+            },
+        ],
+    )
+
+    result = api_client.get_user(1)
+
+    assert result == {
+        "id": 1,
+        "name": "sasaki",
+        "job": "qa",
+    }
+
+    assert requests_mock.call_count == 2
+def test_get_user_retry_limit_exceeded(
+    requests_mock,
+    api_client,
+):
+    """503が続いた場合は、最大回数で打ち切る。"""
+
+    requests_mock.get(
+        f"{BASE_URL}/users/1",
+        [
+            {"status_code": 503},
+            {"status_code": 503},
+            {"status_code": 503},
+        ],
+    )
+
+    with pytest.raises(requests.exceptions.HTTPError):
+        api_client.get_user(1)
+
+    assert requests_mock.call_count == 3
+
+def test_get_user_timeout_then_success(
+    requests_mock,
+    api_client,
+):
+    """1回目がタイムアウト、2回目が200なら成功する。"""
+
+    requests_mock.get(
+        f"{BASE_URL}/users/1",
+        [
+            {
+                "exc": requests.exceptions.ReadTimeout(
+                    "一時的なタイムアウト"
+                )
+            },
+            {
+                "status_code": 200,
+                "json": {
+                    "id": 1,
+                    "name": "sasaki",
+                    "job": "qa",
+                },
+            },
+        ],
+    )
+
+    result = api_client.get_user(1)
+
+    assert result["id"] == 1
+    assert result["name"] == "sasaki"
+    assert result["job"] == "qa"
+
+    assert requests_mock.call_count == 2
+def test_get_user_404_does_not_retry(
+    requests_mock,
+    api_client,
+):
+    """404の場合はリトライせず、1回で終了する。"""
+
+    requests_mock.get(
+        f"{BASE_URL}/users/999",
+        status_code=404,
+        json={
+            "message": "User not found",
+        },
+    )
+
+    with pytest.raises(
+        UserNotFoundError,
+        match="ユーザーが見つかりません",
+    ):
+        api_client.get_user(999)
+
+    assert requests_mock.call_count == 1
